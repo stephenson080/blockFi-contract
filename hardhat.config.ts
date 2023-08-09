@@ -1,10 +1,9 @@
 import { HardhatUserConfig } from "hardhat/config";
 import "@nomicfoundation/hardhat-toolbox";
-import "hardhat-gas-reporter"
-import {config} from 'dotenv'
+import "hardhat-gas-reporter";
+import { config } from "dotenv";
 
-config()
-
+config();
 
 const hardhatConfig: HardhatUserConfig = {
   solidity: "0.8.18",
@@ -13,14 +12,14 @@ const hardhatConfig: HardhatUserConfig = {
     hardhat: {},
     polygon_mumbai: {
       url: "https://rpc-mumbai.maticvigil.com",
-      accounts: [`${process.env.KEY}`]
-    }
+      accounts: [`${process.env.PRIVATE_KEY1}`],
+    },
   },
   gasReporter: {
-    currency: 'CHF',
+    currency: "CHF",
     gasPrice: 21,
-    enabled: true
-  }
+    enabled: true,
+  },
 };
 
 export default hardhatConfig;
