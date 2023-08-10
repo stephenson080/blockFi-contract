@@ -44,7 +44,7 @@ contract BlocFi is Ownable {
     mapping(address => uint) institution_to_id;
     mapping(address => uint) candidate_to_id;
     mapping(uint => mapping(uint => Credential)) public candidates_credential;
-    mapping(string => Credential) public institution_credential;
+    mapping(uint => mapping(uint => Credential)) public institution_credential;
     // mapping (address => uint) skill_to_id;
     // mapping (address => uint) certificate_to_id;
     // mapping (address => uint) endorsement_to_id;
@@ -61,6 +61,7 @@ contract BlocFi is Ownable {
         string name;
         string website;
         bool created;
+        bool verified;
     }
 
     // struct Experience {
@@ -82,6 +83,7 @@ contract BlocFi is Ownable {
         string cid;
         bytes _hash;
         CredentialType credentialType;
+        uint issuer;
         bool verified;
         bool created;
     }
@@ -119,7 +121,12 @@ contract BlocFi is Ownable {
             resolveId(_msgSender(), idTypes.Comp) <= 0,
             "BlocFi: Address already creator of a company"
         );
-        Institution memory newInstitution = Institution(_name, _website, true);
+        Institution memory newInstitution = Institution(
+            _name,
+            _website,
+            true,
+            false
+        );
         institutions[institutionIds] = newInstitution;
         institution_to_id[_msgSender()] = institutionIds;
         institutionIds += 1;
@@ -155,8 +162,14 @@ contract BlocFi is Ownable {
         string memory credential_no,
         string calldata cid,
         uint issue_timestamp,
-        uint16 credential_type
-    ) external check_candidate check_system_status {
+        uint16 credential_type,
+        uint _issuer
+    )
+        external
+        check_candidate
+        check_system_status
+        check_if_institution_created(_issuer)
+    {
         uint user_id = resolveId(_msgSender(), idTypes.Can);
         Candidate storage _candidate = candidates[user_id];
         CredentialType _type = resolveCredentialType(credential_type);
@@ -166,18 +179,19 @@ contract BlocFi is Ownable {
             cid,
             _hash,
             _type,
+            _issuer,
             false,
             true
         );
         credentials[credentialId] = newCred;
         candidates_credential[user_id][credentialId] = newCred;
-        institution_credential[credential_no] = newCred;
+        institution_credential[_issuer][credentialId] = newCred;
 
         credentialId += 1;
         _candidate.no_of_credentials += 1;
     }
 
-    function approveCredential(
+    function verifyCredential(
         uint credential_id
     ) external check_system_status onlyOwner {
         Credential storage credential = credentials[credential_id];
@@ -259,9 +273,13 @@ contract BlocFi is Ownable {
 
     function getCredential(
         uint _credentialId
-    ) external view returns (Credential memory) {
+    ) external view returns (Credential memory, string memory _credential_no) {
         Credential memory _credential = credentials[_credentialId];
-        return _credential;
+        string memory _credentialNo = retrieveCredentialNo(
+            _credentialId,
+            _credential.cid
+        );
+        return (_credential, _credentialNo);
     }
 
     function getAdmin(address _address) external view onlyOwner returns (bool) {
@@ -318,10 +336,10 @@ contract BlocFi is Ownable {
         return _hash_value;
     }
 
-    function retrieveCID(
+    function retrieveCredentialNo(
         uint _credential_id,
         string memory _cid
-    ) external view returns (string memory) {
+    ) public view returns (string memory) {
         bytes memory hash_key = abi.encode(_cid);
         bytes memory _cid_hash = hashes[hash_key][_credential_id];
         string memory _credential_no = abi.decode(_cid_hash, (string));
