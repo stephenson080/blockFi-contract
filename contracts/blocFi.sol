@@ -11,6 +11,7 @@ contract BlocFi is Ownable {
     mapping(uint => Credential) private credentials;
 
     mapping(bytes => mapping(uint => bytes)) public hashes;
+    mapping(bytes => uint) public credentialNo_id;
 
     mapping(address => bool) private admins;
 
@@ -79,11 +80,11 @@ contract BlocFi is Ownable {
     // }
 
     struct Credential {
-        uint issue_date;
         string cid;
-        bytes _hash;
+        uint issue_date;
         CredentialType credentialType;
         uint issuer;
+        uint owner;
         bool verified;
         bool created;
     }
@@ -159,7 +160,7 @@ contract BlocFi is Ownable {
     // }
 
     function addCredential(
-        string memory credential_no,
+        string calldata credential_no,
         string calldata cid,
         uint issue_timestamp,
         uint16 credential_type,
@@ -169,39 +170,46 @@ contract BlocFi is Ownable {
         check_candidate
         check_system_status
         check_if_institution_created(_issuer)
+        checkIfCredentialWithNoHasBeenAdded(credential_no)
     {
         uint user_id = resolveId(_msgSender(), idTypes.Can);
-        Candidate storage _candidate = candidates[user_id];
         CredentialType _type = resolveCredentialType(credential_type);
-        bytes memory _hash = hashCredential(cid, credential_no, credentialId);
         Credential memory newCred = Credential(
-            issue_timestamp,
             cid,
-            _hash,
+            issue_timestamp,
             _type,
             _issuer,
+            user_id,
             false,
             true
         );
+        hashCredential(cid, credential_no, credentialId);
+        credentialNo_id[_hashNo(credential_no)] = credentialId;
         credentials[credentialId] = newCred;
         candidates_credential[user_id][credentialId] = newCred;
         institution_credential[_issuer][credentialId] = newCred;
 
         credentialId += 1;
-        _candidate.no_of_credentials += 1;
+        candidates[user_id].no_of_credentials += 1;
     }
 
     function verifyCredential(
-        uint credential_id
-    ) external check_system_status onlyOwner {
+        string calldata credentialNo
+    ) external check_system_status check_if_institution_verified(_msgSender()) {
+        uint credential_id = credentialNo_id[_hashNo(credentialNo)];
+        require(credential_id > 0, "BlocFi: Credential not found");
         Credential storage credential = credentials[credential_id];
         credential.verified = true;
+        uint _id = resolveId(_msgSender(), idTypes.Comp);
+
+        institution_credential[_id][credential_id] = credential;
+        candidates_credential[credential.owner][credential_id] = credential;
     }
 
     function resolveId(
         address pointer,
         idTypes _type
-    ) internal view returns (uint) {
+    ) public view returns (uint) {
         if (_type == idTypes.Can) {
             return candidate_to_id[pointer];
         } else if (_type == idTypes.Comp) {
@@ -237,13 +245,24 @@ contract BlocFi is Ownable {
         return candidates[_id];
     }
 
-    function manageAccount(
+    function manageCandidateAccount(
         address _owner,
         bool status
     ) external canVerifyAccount {
         uint user_id = resolveId(_owner, idTypes.Can);
+        require(user_id > 0, "BlocFi: Account not found");
         Candidate storage _can = candidates[user_id];
         _can.is_verified = status;
+    }
+
+    function manageInstitutionAccount(
+        address _owner,
+        bool status
+    ) external canVerifyAccount {
+        uint _id = resolveId(_owner, idTypes.Comp);
+        require(_id > 0, "BlocFi: Account not found");
+        Institution storage _inst = institutions[_id];
+        _inst.verified = status;
     }
 
     function manageShutdown(bool status) external onlyOwner {
@@ -286,6 +305,14 @@ contract BlocFi is Ownable {
         return admins[_address];
     }
 
+    modifier checkIfCredentialWithNoHasBeenAdded(string calldata _credNo) {
+        require(
+            credentialNo_id[_hashNo(_credNo)] <= 0,
+            "BlockFi: Credential With No Has been Added Already"
+        );
+        _;
+    }
+
     modifier checkAddress0(address _address) {
         require(_address != address(0), "BlocFi: Invalid wallet address");
         _;
@@ -312,6 +339,13 @@ contract BlocFi is Ownable {
         _;
     }
 
+    modifier check_if_institution_verified(address _sender) {
+        uint _id = resolveId(_sender, idTypes.Comp);
+        Institution storage _institution = institutions[_id];
+        require(_institution.verified, "BlocFi: Institution not Verified");
+        _;
+    }
+
     modifier check_system_status() {
         require(!emergenceShutdown, "BlocFi: System on Emergency shotdown");
         _;
@@ -323,6 +357,10 @@ contract BlocFi is Ownable {
             "BlocFi: Can't verify account"
         );
         _;
+    }
+
+    function _hashNo(string calldata no) internal pure returns (bytes memory) {
+        return abi.encode(no);
     }
 
     function hashCredential(
@@ -344,5 +382,15 @@ contract BlocFi is Ownable {
         bytes memory _cid_hash = hashes[hash_key][_credential_id];
         string memory _credential_no = abi.decode(_cid_hash, (string));
         return _credential_no;
+    }
+
+    function viewCredential(
+        string calldata credentialNo
+    ) external view returns (Credential memory, bytes memory) {
+        uint credential_id = credentialNo_id[_hashNo(credentialNo)];
+        Credential storage credential = credentials[credential_id];
+        bytes memory hash_key = abi.encode(credential.cid);
+        bytes memory _hashValue = hashes[hash_key][credential_id];
+        return (credential, _hashValue);
     }
 }

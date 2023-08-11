@@ -6,7 +6,16 @@ import { config } from "dotenv";
 config();
 
 const hardhatConfig: HardhatUserConfig = {
-  solidity: "0.8.18",
+  solidity: {
+    version: "0.8.18",
+    settings: {
+      optimizer: {
+        enabled: true,
+        runs: 100,
+      },
+      viaIR: true,
+    },
+  },
   defaultNetwork: "hardhat",
   networks: {
     hardhat: {},
@@ -15,6 +24,7 @@ const hardhatConfig: HardhatUserConfig = {
       accounts: [`${process.env.PRIVATE_KEY1}`],
     },
   },
+
   gasReporter: {
     currency: "CHF",
     gasPrice: 21,

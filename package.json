@@ -10,7 +10,9 @@
     "comp": "npx hardhat compile",
     "test": "npx hardhat test",
     "deploy:local": "npx hardhat run scripts/deploy_blockfi.ts --network hardhat",
-    "deploy:mumbai": "npx hardhat run scripts/deploy_blockfi.ts --network polygon_mumbai"
+    "deploy:mumbai": "npx hardhat run scripts/deploy_blockfi.ts --network polygon_mumbai",
+    "verify-cand": "node scripts/verify_candidate.mjs",
+    "verify-inst": "node scripts/verify_institution.mjs"
   },
   "devDependencies": {
     "@ethersproject/abi": "^5.4.7",
